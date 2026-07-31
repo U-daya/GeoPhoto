@@ -226,6 +226,20 @@ export async function parseQuery(raw) {
         : null,
       interpreted: [],
     };
+
+    // Groq sometimes plays it safe on a short, single-word brief ("park",
+    // "river", ...) and returns everything null/empty even though it's an
+    // exact hit in NATURAL_FEATURE_LEXICON/TYPE_LEXICON below — e.g. "park"
+    // read as ambiguous (parking?) rather than the natural-feature example
+    // the system prompt explicitly lists. Only step in when Groq truly found
+    // nothing to work with; a real Groq match (even a partial one) is never
+    // second-guessed.
+    if (!out.types.size && !out.naturalFeature) {
+      const local = parseQueryLocal(raw);
+      if (local.types.size) out.types = local.types;
+      if (local.naturalFeature) out.naturalFeature = local.naturalFeature;
+    }
+
     out.interpreted = buildInterpretedChips(out);
     return out;
   } catch (e) {

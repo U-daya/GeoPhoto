@@ -159,7 +159,11 @@ Output ONLY a JSON object, no prose, matching exactly this shape:
 Only include a "types" entry if it's clearly implied. Do not invent details not present in the brief.
 If the brief is vague, empty, or matches nothing specific (e.g. a single unrelated word with no
 clear feature or building type), return all nulls, empty arrays, and naturalFeature: null —
-do not guess a category that isn't actually implied.`;
+do not guess a category that isn't actually implied.
+A brief that is JUST one of the building types or natural-feature examples listed above ("park",
+"river", "lake", "warehouse", ...) is NOT vague — it's an exact, unambiguous match for that single
+category. Treat it accordingly instead of second-guessing it as too short to mean anything (e.g.
+"park" always means the natural-feature "Park", never "parking").`;
 
 app.post('/api/parse-query', async (req, res) => {
   const { query } = req.body || {};
