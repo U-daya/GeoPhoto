@@ -113,10 +113,8 @@ export function updateMap(state, results, allLocations) {
     centerMarker.setLatLng([center.lat, center.lng]);
   }
 
-  const resultIds = new Set(results.map(r => r.id));
   const allLocationIds = new Set(allLocations.map(l => l.id));
   for (const loc of allLocations) {
-    const inResults = resultIds.has(loc.id);
     const t = typeInfo(loc);
     const selected = loc.id === selectedId;
     let m = markers.get(loc.id);
@@ -132,7 +130,9 @@ export function updateMap(state, results, allLocations) {
     const el = m.getElement();
     if (el) {
       el.style.setProperty('--c', t.color || TEAL);
-      el.classList.toggle('dim', !inResults);
+      // Only the searched-for/selected pin stays fully lit — every other
+      // pin dims, whether or not it still matches the active search filters.
+      el.classList.toggle('dim', !selected);
     }
   }
 
@@ -150,17 +150,25 @@ export function updateMap(state, results, allLocations) {
 }
 
 // Marks a location's pin as the active selection (amber) — called when its
-// detail view opens; cleared when it closes.
+// detail view opens; cleared when it closes. Applied here (not just left to
+// the next updateMap() call) so the searched-for pin lights up — and every
+// other pin dims — the instant a marker/card is clicked, not on the next search.
+function applySelectionStyling() {
+  for (const [id, m] of markers) {
+    const el = m.getElement();
+    if (!el) continue;
+    const isSelected = id === selectedId;
+    el.classList.toggle('selected', isSelected);
+    el.classList.toggle('dim', !isSelected);
+  }
+}
 export function setSelectedMarker(id) {
   selectedId = id;
-  const el = markers.get(id)?.getElement();
-  if (el) el.classList.add('selected');
+  applySelectionStyling();
 }
 export function clearSelectedMarker() {
-  const prev = selectedId;
   selectedId = null;
-  const el = prev && markers.get(prev)?.getElement();
-  if (el) el.classList.remove('selected');
+  applySelectionStyling();
 }
 
 export function flyToListing(loc) {

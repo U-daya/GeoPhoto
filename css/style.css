@@ -401,8 +401,9 @@ header .spacer {
 /* 2D map pins — same teardrop shape/per-type color as the 3D view's markers
    (--c set inline per location type) so building types read at a glance
    without hovering. The emoji is counter-rotated to sit upright inside the
-   rotated teardrop. Selection uses the amber accent; out-of-filter pins dim
-   rather than disappear. */
+   rotated teardrop. Selection uses the amber accent; every other pin dims
+   rather than disappearing, so only the searched-for/selected location
+   stands out on the map. */
 .pin2d {
   width: 26px;
   height: 26px;
