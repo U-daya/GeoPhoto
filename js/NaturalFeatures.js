@@ -40,7 +40,17 @@ function buildOverpassQuery(center, radiusM, tags, elementTypes) {
     const clauses = types
         .map(t => `  ${t}${tagFilter}(around:${radiusM},${center.lat},${center.lng});`)
         .join('\n');
-    return `[out:json][timeout:25];\n(\n${clauses}\n);\nout body geom;`;
+    // "geom" (full node-by-node polygon geometry) is never read below — only
+    // el.bounds (for size filtering) and el.tags are used — but requesting it
+    // anyway multiplies the response size for any densely-tagged, area-heavy
+    // feature. That's exactly why a search like "park" (leisure=park —
+    // hundreds of parks/playgrounds/gardens in range in most US metros)
+    // could time out or get rejected by a mirror while a rarer tag like
+    // waterway=river sails through: "bb" gets the bounding box the size
+    // filter needs at a fraction of the payload. The trailing limit caps the
+    // element count outright so no single dense tag can blow up the query
+    // regardless of radius.
+    return `[out:json][timeout:25];\n(\n${clauses}\n);\nout body bb 300;`;
 }
 
 // A transient client-side network blip (Chrome's ERR_NETWORK_CHANGED, Wi-Fi
