@@ -182,6 +182,30 @@ function runSearch() {
   return results;
 }
 
+// Of the current results, which ones actually match what was specifically
+// searched for (an explicit building type — from a chip or the AI parse —
+// or a detected natural feature like "river")? runSearch()'s type filter
+// only excludes non-matching *building* types when a type is wanted; a
+// feature search like "river" leaves wantedTypes empty, so every catalog
+// building within radius still comes back as a "result" even though the
+// user only asked about rivers. This narrows that down so the map can light
+// up just the on-topic pins and dim the rest — for every kind of search,
+// not just building-type ones.
+function computeSearchTargetIds(results) {
+  const wantedTypes = new Set([...state.types, ...(state.query ? state.query.types : [])]);
+  const hasFeature = !!state.dynamicFeature;
+  // Nothing specific was asked for (a purely descriptive/style/budget query)
+  // — there's no on-topic subset to narrow to, so every result counts.
+  if (!wantedTypes.size && !hasFeature) return new Set(results.map(r => r.id));
+
+  const ids = new Set();
+  for (const r of results) {
+    if (hasFeature && !TYPES[r.type]) ids.add(r.id); // matches the searched-for natural feature
+    else if (wantedTypes.size && TYPES[r.type] && wantedTypes.has(r.type)) ids.add(r.id);
+  }
+  return ids;
+}
+
 // Fetches results for the current dynamic feature (if any) + center/radius,
 // unless we've already fetched for this exact view. Fire-and-forget from
 // render() — re-renders once results land rather than blocking the current
@@ -313,7 +337,7 @@ function render() {
   // Before the first search, no markers should be on the map at all — not
   // even dimmed ones — so pass an empty set rather than the full catalog.
   const allLocations = state.hasSearched ? [...LOCATIONS, ...dynamicLocations, ...dynamicTypeLocations] : [];
-  updateMap(state, results, allLocations);
+  updateMap(state, results, allLocations, computeSearchTargetIds(results));
   if (state.view === '3d') update3D(state.center, results);
 
   // exposure-style HUD readout, top-left of the map viewport

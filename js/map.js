@@ -17,6 +17,19 @@ let map, radiusCircle, centerMarker, tileLayer;
 let satellite = false;
 const markers = new Map(); // listing id -> L.marker
 let selectedId = null;
+// ids of results that match what was actually searched for (a specific
+// building type or a detected natural feature like "river") — everything
+// else on the map dims. null means "no specific target" (nothing searched
+// yet, or a purely descriptive query with nothing to narrow to), in which
+// case nothing is dimmed on that basis alone.
+let searchTargetIds = null;
+
+// True when a pin should render at full brightness: it's the one explicit
+// selection, or (with nothing selected) it's part of what was searched for.
+function isLit(id) {
+  if (selectedId) return id === selectedId;
+  return !searchTargetIds || searchTargetIds.has(id);
+}
 
 // A teardrop pin colored per location type (matching the 3D view's markers)
 // with the type's emoji upright inside it — lets a scout tell building types
@@ -89,13 +102,14 @@ function typeInfo(loc) {
   return TYPES[loc.type] || { icon: loc._icon || '📍', label: loc._label || 'Location', color: loc._color || TEAL };
 }
 
-export function updateMap(state, results, allLocations) {
+export function updateMap(state, results, allLocations, highlightIds) {
   // Guard: if initMap crashed or hasn't finished, map is undefined — bail
   // instead of throwing on addTo/addLayer.
   if (!map) {
     console.warn('updateMap called before map was initialized — skipping.');
     return;
   }
+  searchTargetIds = highlightIds || null;
 
   const { center, radiusMi } = state;
   const radiusM = radiusMi * 1609.34;
@@ -130,9 +144,9 @@ export function updateMap(state, results, allLocations) {
     const el = m.getElement();
     if (el) {
       el.style.setProperty('--c', t.color || TEAL);
-      // Only the searched-for/selected pin stays fully lit — every other
-      // pin dims, whether or not it still matches the active search filters.
-      el.classList.toggle('dim', !selected);
+      // Only the searched-for/selected pin(s) stay fully lit — every other
+      // pin dims, whether or not it still matches the broader search filters.
+      el.classList.toggle('dim', !isLit(loc.id));
     }
   }
 
@@ -157,9 +171,8 @@ function applySelectionStyling() {
   for (const [id, m] of markers) {
     const el = m.getElement();
     if (!el) continue;
-    const isSelected = id === selectedId;
-    el.classList.toggle('selected', isSelected);
-    el.classList.toggle('dim', !isSelected);
+    el.classList.toggle('selected', id === selectedId);
+    el.classList.toggle('dim', !isLit(id));
   }
 }
 export function setSelectedMarker(id) {
