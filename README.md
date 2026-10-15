@@ -1,44 +1,85 @@
 # SceneScout
 
-Location scouting for film, photo, and video shoots — describe what you need in plain English, and find it on a map, walk through a 3D twin of it, and check the street outside, without leaving your desk.
+**TL;DR:** Describe a film/photo shoot location in plain English and SceneScout finds matching places on a map, scores how well each fits your brief, and lets you walk through a procedurally generated 3D model of the space.
 
-## Problem statement
+<!-- TODO: add a screenshot or GIF, e.g. save it as docs/demo.gif and uncomment:
+![SceneScout demo](docs/demo.gif)
+-->
 
-Finding a shoot location is still mostly a manual, word-of-mouth process. A scout or indie director either drives around neighborhoods hoping to spot something, cold-calls property owners, or scrolls through generic listing sites that have no idea what "abundant natural light," "400A power," or "blackout capable" even mean. There's no single place to search for a location the way you'd actually describe it to a person, no quick way to judge whether a space will actually work for a shoot before visiting it in person, and no way to get a feel for walking through the space itself until you're standing in it — which, for a small crew on a tight budget, can mean wasted trips, missed light, and locations that looked fine in three photos and turned out to be unusable in reality.
+Built in July 2026 for a hackathon (theme: *Reimagine Creative Industries with AI*). It's no longer under active development and lives on as a portfolio project.
 
-## Solution description
+Built with AI-assisted development: IBM Bob was used throughout.
 
-SceneScout lets you type a brief the way you'd say it out loud — "modern industrial warehouse with big windows near downtown Chicago, under $500 a day" — and turns that into an actual search: building type, style, light, size, budget, and radius, run against a database of 899 real US properties plus live natural-feature and business search for anything the curated catalog doesn't cover (lakes, parks, real photography studios, and so on).
+## Features
 
-Every result comes with an AI-generated suitability score against your specific brief, not just a generic listing page — visual match, space and scale, accessibility, lighting, parking, noise, and production-friendliness, each with a plain-language reason attached. You get real sunrise/golden-hour timing and weather for the location's actual coordinates, the nearest airport, and links straight out to Google Street View, Google Earth, and directions.
+- **Natural-language search.** Type something like *"modern industrial warehouse with big windows near downtown Chicago, under $500 a day"*. An LLM (Groq) turns it into structured filters: building type, style, light, size, budget, radius, and location. If no Groq key is set, a local keyword parser takes over.
+- **899-location catalog plus live search.** The bundled catalog is built from four public US real-estate datasets. Live OpenStreetMap natural-feature search (lakes, parks, mountains…) and Foursquare business search cover what the catalog doesn't.
+- **Explainable suitability score.** Every result gets an overall match percentage and a nine-factor breakdown, with a short written reason for each factor.
+- **Walkable 3D digital twin.** Floor plans are generated procedurally for each property and rendered in Three.js. You can click to walk around with BVH mesh collision, take a cinematic flythrough, or switch to a dollhouse view.
+- **Shoot logistics.** Sunrise, sunset, and golden-hour times are computed from each location's coordinates. Weather comes from Open-Meteo, and there are links out to Street View, Google Earth, and directions.
+- **Explore Globe and script breakdown.** Scout anywhere on a 3D globe, or upload a screenplay PDF to pull out the locations, scene headings, and budget figures it mentions.
 
-Then, instead of stopping at photos, you can click "Enter 3D Digital Twin" and actually walk through a procedurally generated 3D reconstruction of the property's floor plan — first-person, real collision against the walls and furniture, a cinematic flythrough option, and a dollhouse/floor-plan view — to get a real feel for the space before ever scheduling a visit. There's also a whole-Earth "Explore Globe" mode for scouting anywhere on the map with no search radius at all, and a screenplay-upload feature that reads a PDF script and pulls out the locations, scene headings, and budget language it mentions, so you can go from a script straight to a location search.
+## Architecture
 
-The whole thing is also built to keep working with zero configuration — every external API it calls (AI query parsing, geocoding, natural-feature search) has a offline fallback that kicks in automatically if a key isn't set or a service is unreachable, so the core experience — the catalog, the map, the filters, the 3D tours — never actually breaks.
+```mermaid
+flowchart LR
+    subgraph Browser["Browser: vanilla JS ES modules, no bundler"]
+        UI["UI + Leaflet 2D map<br/>MapLibre GL globe"]
+        Score["score.js<br/>deterministic 9-factor score"]
+        Twin["Three.js 3D twin<br/>three-mesh-bvh collision"]
+    end
 
-## AI approach and architecture
+    subgraph Server["Express server.js: API proxy + cache, keys stay server-side"]
+        API["/api/*"]
+        FB["Offline fallback modules"]
+    end
 
-- **Natural-language query parsing.** A user's free-text brief is sent to an LLM (via Groq) with a strict JSON schema — building type, style keywords, light level, min square footage, max daily rate, radius, a target location, and (separately) whether the brief is actually describing a natural feature rather than a building, in which case it also has to guess a real OpenStreetMap tag for it. That structured output drives every filter in the UI directly.
-- **Suitability scoring.** Each candidate location is scored against the parsed brief across weighted factors (visual match, space/scale, accessibility, lighting, parking, noise, privacy, production-friendliness), producing both an overall percentage and a per-factor breakdown with a written reason, not just a number.
-- **Procedural 3D reconstruction.** Rather than 8 fixed building templates, floor plans are generated procedurally per property and rendered with a style-preset system that matches materials and lighting mood to the property's actual type, real BVH mesh collision (not a rough bounding box) for walking through the space, PBR materials, and post-processing.
-- **Resilience layer.** Every AI/external-data call — Groq parsing, LocationIQ geocoding (forward and reverse), Overpass/GeoNames natural-feature search, Foursquare business search — has a matching offline fallback module that activates automatically on a missing key or a failed call: a lightweight keyword parser, a bundled list of major US cities, a curated list of well-known natural landmarks, and a graceful empty result, respectively. The app degrades in place instead of breaking.
-- **Server**: a small Express backend (`server.js`) proxies and caches all of the above, keeping every API key server-side.
-- **Frontend**: vanilla JS ES modules, no bundler — Leaflet for the 2D map, MapLibre GL for the 3D/globe view, Three.js (with three-mesh-bvh for collision) for the walkable digital twin.
+    UI -->|"/api/*"| API
+    API --> Catalog[("data/locations.json<br/>899 locations")]
+    API --> Groq["Groq LLM<br/>query parsing"]
+    API --> LIQ["LocationIQ<br/>geocoding"]
+    API --> OSM["Overpass / GeoNames<br/>natural features"]
+    API --> FSQ["Foursquare<br/>businesses"]
+    API -. "missing key or failed call" .-> FB
+    UI --> Meteo["Open-Meteo<br/>weather"]
+```
 
-## Selected challenge theme
+### How the suitability score works
 
-**July Challenge — Reimagine Creative Industries with AI.**
+The score is **a deterministic weighted formula** in [`js/score.js`](js/score.js), not LLM output. The LLM only parses your brief into structured filters. The score itself is plain arithmetic, so the same inputs always give the same result and every factor can be explained.
 
-Location scouting is a real, unglamorous bottleneck in film and photo production — the industry this challenge is asking us to reimagine. SceneScout puts AI directly into a working creative team's workflow: turning a plain-language creative brief into a structured search, scoring how well a real space actually fits the shot a director has in mind, and reconstructing that space in 3D so a crew can walk through it and judge the light, the layout, and the feel before ever booking a flight or a rental van. It's not a general-purpose AI demo bolted onto a map — every AI-driven piece (the query parser, the suitability scoring, the screenplay breakdown) exists specifically to help someone making something get from an idea to a real place faster.
+| Factor | Weight | Source |
+|---|---|---|
+| Visual Match | 26 | Requested type and style keywords vs. the listing's tags and description |
+| Lighting | 16 | Requested vs. listed light level |
+| Space & Scale | 12 | Requested minimum ft² vs. listed ft² |
+| Parking | 9 | Modeled production intel |
+| Accessibility | 9 | Modeled production intel |
+| Noise Level | 9 | Modeled production intel |
+| Privacy | 8 | Modeled production intel |
+| Production Friendliness | 7 | Modeled production intel |
+| Permit Complexity | 4 | Modeled production intel |
 
-## How IBM Bob was used
+The overall score is the weighted average of the nine factors. Locations that go over your stated budget lose up to 18 points.
 
-_TODO — describe your team's actual Bob workflow here (which parts of the app Bob built or scaffolded, how you iterated with it, what you'd point a judge at first). I don't have direct visibility into your Bob sessions outside this conversation, so I've left this for you to fill in accurately rather than guess._
+### Fallbacks when API keys are missing
+
+Every keyed service has a fallback, so the app runs with no `.env` at all. The browser still needs internet access for map tiles, weather, and Overpass.
+
+| Service | What happens without a key, or when the call fails |
+|---|---|
+| Groq (query parsing) | Local keyword parser (`parse-query-fallback.js`) |
+| LocationIQ (forward geocoding) | Bundled list of 128 US cities (`data/offline-centers.json`); matches city names only |
+| LocationIQ (reverse geocoding) | No fallback; Explore Globe shows raw coordinates instead of a place name |
+| Overpass → GeoNames (natural features) | 49 bundled well-known US landmarks (`data/offline-natural-features.json`) |
+| Foursquare (business search) | Empty result |
 
 ## Running it
 
+Requires **Node.js 20.19+ or 22.9+**, because `npm run dev` uses `node --env-file-if-exists`.
+
 ```bash
-git clone -b Locations https://github.com/U-daya/GeoPhoto.git
+git clone https://github.com/U-daya/GeoPhoto.git
 cd GeoPhoto
 npm install
 npm run dev
@@ -46,18 +87,43 @@ npm run dev
 
 Then open **http://localhost:3001**.
 
-Works out of the box with zero configuration. For live AI search and geocoding, create a `.env` file in the project root:
+Optional: add API keys in a `.env` file in the project root to turn on live AI parsing, precise geocoding, and live search:
 
 ```
-GROQ_API_KEY=your_groq_key        # console.groq.com/keys — free tier
-LOCATIONIQ_KEY=your_locationiq_key  # locationiq.com/register — free tier
-GEONAMES_USERNAME=your_username     # geonames.org/login — free, enable "web services" in account settings
+GROQ_API_KEY=your_groq_key            # console.groq.com/keys (free tier)
+LOCATIONIQ_KEY=your_locationiq_key    # locationiq.com/register (free tier)
+GEONAMES_USERNAME=your_username       # geonames.org/login (free; enable "web services")
+FOURSQUARE_API_KEY=your_foursquare_key  # foursquare.com/developers
 ```
 
-Without any of these, the app runs fully functional on its offline fallbacks — the 899-location catalog, map, filters, and 3D tours all work regardless; only live AI parsing and exact geocoding lose precision.
+## What's real vs. simulated
 
-## What's real vs. what's simulated
+**Real:**
+- Locations and square footage of the 899 catalog entries, from four Kaggle datasets: Zillow US House Listings 2023 (598), Southern States Zillow listings (150), NYC Property Sales (121; coordinates are ZIP-code centroids), and King County House Sales (30). See `scripts/build-catalog.js`.
+- LLM query parsing (when a Groq key is set).
+- Solar timing and weather.
+- Live natural-feature and business search.
+- The 3D engine.
 
-Real: the 899 property listings (Zillow US House Listings 2023 dataset), the AI query parsing, the suitability scoring, real sunrise/golden-hour/weather data for each location's actual coordinates, live natural-feature and business search, and the entire walkable 3D digital-twin engine.
+**Derived or simulated:**
+- Most building types are inferred heuristically. Building types for NYC entries come from real building-class codes.
+- Daily rates and light levels are derived from the listing data.
+- The production-intel factors (parking, accessibility, noise, privacy, power, permits) and the review summaries are generated.
+- Interiors are procedural, not scanned.
 
-Simulated, and labeled as such in the app: the per-location production-intelligence factors (parking, noise, permit difficulty) and review summaries, since this is a prototype without access to licensed production-scouting data. A production version would swap these for licensed feeds (MLS/Zillow partner APIs, Peerspace, Giggster) and photogrammetry-based interior capture (Matterport, or COLMAP → NeRF/Gaussian splatting) in place of the procedural 3D reconstruction — the search, scoring, map, and UI layers are all data-source-agnostic and wouldn't need to change.
+The app labels this data as simulated.
+
+## AI-assisted development
+
+SceneScout was built with AI-assisted development tools: **IBM Bob** and **Claude Code**. Much of the commit history was written through Claude Code, and the rest by the team.
+
+## My contributions
+
+SceneScout began as a hackathon project. These are the parts I built and owned:
+
+- **AI search:** integrated the Groq LLM to turn free-text briefs into structured search filters, with a local keyword-parser fallback.
+- **3D digital twin:** took the walkthrough from prototype to realistic. I added procedural textures, environment lighting, bloom and tone mapping, and fixed first-person movement bugs.
+- **Explore Globe:** found and fixed a race condition in the map projection setup that made the first click fail.
+- **UI polish:** fixed layout clipping in the filter sidebar, removed visual clutter, and added Street View and Google Earth links to the globe click panel.
+- **Integration:** resolved merge conflicts between parallel implementations of the 3D renderer from different branches.
+- **Portfolio release:** rewrote this README, corrected inaccurate claims, fixed the LocationIQ key-check bug, and cleaned up leftover build files.

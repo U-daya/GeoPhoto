@@ -3,7 +3,7 @@ services:
     name: scenescout
     runtime: node
     plan: free
-    branch: claude/geophoto-photoscout-clone-9ufo71
+    branch: main
     autoDeploy: true
     buildCommand: npm install
     startCommand: npm start
@@ -13,4 +13,8 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: LOCATIONIQ_KEY
+        sync: false
+      - key: GEONAMES_USERNAME
+        sync: false
+      - key: FOURSQUARE_API_KEY
         sync: false

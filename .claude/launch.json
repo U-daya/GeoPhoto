@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "scenescout",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8674"],
-      "port": 8674
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3001
     }
   ]
 }

@@ -10,3 +10,4 @@ data/*
 !data/offline-centers.json
 !data/offline-natural-features.json
 supply-chain-globe/
+.next/
