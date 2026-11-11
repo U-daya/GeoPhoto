@@ -1,6 +1,6 @@
 // AI suitability scoring. Blends the user's prompt + filters with each
 // location's attributes and modeled production intelligence into an overall
-// match percentage and an eight-factor breakdown, each with a short
+// match percentage and a nine-factor breakdown, each with a short
 // explanation and a confidence level. Deterministic and explainable — no black
 // box — so a scout can see exactly why a place scored the way it did.
 

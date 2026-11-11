@@ -80,7 +80,7 @@ app.get('/api/geocode', async (req, res) => {
   if (cache[address]) return res.json(cache[address]);
 
   // If LocationIQ key missing, use offline fallback
-  if (!LOCATIONIQ_KEY || LOCATIONIQ_KEY === 'YOUR_KEY_HERE') {
+  if (!LOCATIONIQ_KEY || LOCATIONIQ_KEY === 'YOUR_LOCATIONIQ_KEY_HERE') {
     console.log('[fallback] LocationIQ key missing – using offline geocode');
     const result = fallbackGeocode(address);
     cache[address] = result;
@@ -577,7 +577,7 @@ app.get('/api/place-info', async (req, res) => {
 app.get('/api/reverse-geocode', async (req, res) => {
   const { lat, lng } = req.query;
   if (!lat || !lng) return res.status(400).json({ error: 'Missing lat/lng' });
-  if (!LOCATIONIQ_KEY || LOCATIONIQ_KEY === 'YOUR_KEY_HERE') {
+  if (!LOCATIONIQ_KEY || LOCATIONIQ_KEY === 'YOUR_LOCATIONIQ_KEY_HERE') {
     return res.status(500).json({ error: 'LOCATIONIQ_KEY not set' });
   }
   const key = `rev:${(+lat).toFixed(4)},${(+lng).toFixed(4)}`;
